@@ -33,7 +33,7 @@ def extractKeypointsAndDescriptors(image):
     for keypoint in keypoints:
         keypointsInFloat.append(keypoint.pt)
         
-    return {"keypoints": keypointsInFloat, "descriptors": descriptors, "rawkeypoints": keypoints}
+    return {"keypoints": keypointsInFloat, "descriptors": descriptors}
 
 
         
@@ -53,7 +53,7 @@ bestKeypoint1, bestKeypoint2 = [], []
 firstIter = 1
 isSecondDescSet = 0
 
-mathces = []
+matches = []
 distances = []
 
 i, j = 0, 0
@@ -75,6 +75,7 @@ for descriptor1 in kpsDsc1["descriptors"]:
             
         elif distance <= minDistance1:
             bestDesc1 = descriptor2
+            minDistance2 = minDistance1
             minDistance1 = distance
             indexDesc1 = j
             
@@ -92,7 +93,7 @@ for descriptor1 in kpsDsc1["descriptors"]:
         print(indexDesc1)
         x = kpsDsc1["keypoints"][i]
         y = kpsDsc2["keypoints"][indexDesc1]
-        mathces.append((x, y))
+        matches.append((x, y))
     
     isSecondDescSet = 0
     firstIter = 1
@@ -100,8 +101,22 @@ for descriptor1 in kpsDsc1["descriptors"]:
     i += 1
     # print(i)
     
+    
+A = np.matrix([0,0,0,0,0,0,0,0])
+for match in matches:
+    A = np.vstack([A , [match[0][0], match[0][1], 1, 0, 0, 0, -match[0][0] * match[1][0], -match[0][1] * match[1][0]]])
+    A = np.vstack([A , [0, 0, 0, match[0][0], match[0][1], 1, -match[0][0] * match[1][1], -match[0][1] * match[1][1]]])
+A = A[1:, :]
 
+B = np.matrix([0])
+for match in matches:
+    B = np.vstack([B , [match[1][0]]])
+    B = np.vstack([B , [match[1][1]]])
+B = B[1:, :]
 
+H =  np.matmul(np.linalg.inv(np.matmul(A.T, A)), np.matmul(A.T, B))
+H = np.vstack([H, [1]])
+H.reshape((3,3))
 
 
 
