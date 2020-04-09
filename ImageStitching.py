@@ -4,7 +4,7 @@ Created on Thu Apr  2 00:36:51 2020
 
 @author: arda1
 """
-
+import random 
 import numpy as np
 import cv2 as cv
 
@@ -36,7 +36,34 @@ def extractKeypointsAndDescriptors(image):
     return {"keypoints": keypointsInFloat, "descriptors": descriptors}
 
 
-        
+def getRandomElements(_list, size):
+    
+    indexes = random.sample(range(0, len(_list)), size)
+    elements = []
+    for i in indexes:
+        elements.append(_list[i])
+    
+    return elements
+    
+def calculateHomography(points):
+    
+    jacobian = np.matrix([0,0,0,0,0,0,0,0])
+    for match in points:
+        jacobian = np.vstack([jacobian , [match[0][0], match[0][1], 1, 0, 0, 0, -match[0][0] * match[1][0], -match[0][1] * match[1][0]]])
+        jacobian = np.vstack([jacobian , [0, 0, 0, match[0][0], match[0][1], 1, -match[0][0] * match[1][1], -match[0][1] * match[1][1]]])
+    jacobian = jacobian[1:, :]
+    
+    res = np.matrix([0])
+    for match in points:
+        res = np.vstack([res , [match[1][0]]])
+        res = np.vstack([res , [match[1][1]]])
+    res = res[1:, :]
+    
+    H = np.matmul(np.linalg.inv(np.matmul(jacobian.T, jacobian)), np.matmul(jacobian.T, res))
+    H = np.vstack([H, [1]])
+    H = H.reshape((3,3))
+    
+    return H;   
 
 image1, image1Gray = loadImages(rootPath, "im1.png")
 image2, image2Gray = loadImages(rootPath, "im2.png")
@@ -90,7 +117,7 @@ for descriptor1 in kpsDsc1["descriptors"]:
         # print(minDistance1, "   ", j)
     
     if minDistance1 < 0.75 * minDistance2:
-        print(indexDesc1)
+        # print(indexDesc1)
         x = kpsDsc1["keypoints"][i]
         y = kpsDsc2["keypoints"][indexDesc1]
         matches.append((x, y))
@@ -100,24 +127,42 @@ for descriptor1 in kpsDsc1["descriptors"]:
     j = 0
     i += 1
     # print(i)
+
+
+
+
+# RANSAC BELOW
+numOfIter = 2000
+distanceTreshold = 36
+bestNumOfInliers = 0
+bestInliers = []
+bestH = []
+for i in range(numOfIter):
     
+    pointPairs = getRandomElements(matches, 4)
     
-A = np.matrix([0,0,0,0,0,0,0,0])
-for match in matches:
-    A = np.vstack([A , [match[0][0], match[0][1], 1, 0, 0, 0, -match[0][0] * match[1][0], -match[0][1] * match[1][0]]])
-    A = np.vstack([A , [0, 0, 0, match[0][0], match[0][1], 1, -match[0][0] * match[1][1], -match[0][1] * match[1][1]]])
-A = A[1:, :]
-
-B = np.matrix([0])
-for match in matches:
-    B = np.vstack([B , [match[1][0]]])
-    B = np.vstack([B , [match[1][1]]])
-B = B[1:, :]
-
-H =  np.matmul(np.linalg.inv(np.matmul(A.T, A)), np.matmul(A.T, B))
-H = np.vstack([H, [1]])
-H.reshape((3,3))
-
+    H = calculateHomography(pointPairs)
+    
+    numOfInliers = 0
+    inliers = []
+    for match in matches:
+        predictedPoint1 = np.matmul(H, np.vstack([np.matrix(match[0]).T, [1]]))
+        predictedPoint1 = predictedPoint1 / predictedPoint1[2]
+        predictedPoint1 = predictedPoint1[0:2]
+        # predictedPoint2x = np.divide((np.multiply(H[0, 0], matches[0][0][0]) + np.multiply(H[0, 1] , matches[0][0][1]) + H[0, 2]) ,  (np.multiply(H[2, 0], matches[0][0][0]) + np.multiply(H[2, 1], matches[0][0][1]) + 1 ))
+        # predictedPoint2y = np.divide((np.multiply(H[1, 0], matches[0][0][0]) + np.multiply(H[1, 1] , matches[0][0][1]) + H[1, 2]) ,  (np.multiply(H[2, 0], matches[0][0][0]) + np.multiply(H[2, 1], matches[0][0][1]) + 1 )) 
+        
+        distance = L2Norm(np.array(match[1]).T, (predictedPoint1.T))
+        if(distance < distanceTreshold):
+            numOfInliers += 1
+            inliers.append(match)
+    
+    if numOfInliers > bestNumOfInliers:
+        bestNumOfInliers = numOfInliers
+        bestH = H
+        bestInliers = inliers
+        
+    print(bestNumOfInliers )
 
 
 
