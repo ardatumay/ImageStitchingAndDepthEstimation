@@ -7,7 +7,7 @@ Created on Thu Apr  2 00:36:51 2020
 import random 
 import numpy as np
 import cv2 as cv
-
+from matplotlib import pyplot as plt
 rootPath = "./data_image_stitching/"
 
 
@@ -74,6 +74,8 @@ kpsDsc2 = extractKeypointsAndDescriptors(image2Gray)
 # img=cv.drawKeypoints(image1, kpsDsc1["kp"][0], image1Gray)
 # cv.imwrite('sift_keypoints.jpg',img)
 
+print("FEATURE MATCHING STARTS")
+
 bestDesc1, bestDesc2 = [], []
 minDistance1, minDistance2  = 0, 0
 bestKeypoint1, bestKeypoint2 = [], []
@@ -129,11 +131,11 @@ for descriptor1 in kpsDsc1["descriptors"]:
     # print(i)
 
 
-
+print("RANSAC STARTS")
 
 # RANSAC BELOW
 numOfIter = 2000
-distanceTreshold = 36
+distanceTreshold = 2.5
 bestNumOfInliers = 0
 bestInliers = []
 bestH = []
@@ -152,7 +154,8 @@ for i in range(numOfIter):
         # predictedPoint2x = np.divide((np.multiply(H[0, 0], matches[0][0][0]) + np.multiply(H[0, 1] , matches[0][0][1]) + H[0, 2]) ,  (np.multiply(H[2, 0], matches[0][0][0]) + np.multiply(H[2, 1], matches[0][0][1]) + 1 ))
         # predictedPoint2y = np.divide((np.multiply(H[1, 0], matches[0][0][0]) + np.multiply(H[1, 1] , matches[0][0][1]) + H[1, 2]) ,  (np.multiply(H[2, 0], matches[0][0][0]) + np.multiply(H[2, 1], matches[0][0][1]) + 1 )) 
         
-        distance = L2Norm(np.array(match[1]).T, (predictedPoint1.T))
+        # distance = L2Norm(np.array(match[1]).T, (predictedPoint1.T))
+        distance = cv.norm(np.matrix(match[1]).T, predictedPoint1 ,cv.NORM_L2);
         if(distance < distanceTreshold):
             numOfInliers += 1
             inliers.append(match)
@@ -162,11 +165,68 @@ for i in range(numOfIter):
         bestH = H
         bestInliers = inliers
         
-    print(bestNumOfInliers )
+print("Found inliers --> " + str(bestNumOfInliers))
 
+print("GAUS NEWTON STARTS")
 
+# error = 0
+# for inlier in bestInliers:
+    
+#     predictedPointForTest = np.matmul(bestH, np.vstack([np.matrix(inlier[0]).T, [1]]))
+#     predictedPointForTest = predictedPointForTest / predictedPointForTest[2]
+#     predictedPointForTest = predictedPointForTest[0:2]
+    
+#     errorDistance = L2Norm(np.array(inlier[1]).T, (predictedPointForTest.T))
+#     error += errorDistance 
+# print("Error --> " + str(error))
+    
 
+while 500:
+    jacobian = np.matrix([0,0,0,0,0,0,0,0])
+    res = np.matrix([0])
+    for inlier in bestInliers:
+        
+        sensedPoint = inlier[1]
+        
+        predictedPoint = np.matmul(bestH, np.vstack([np.matrix(inlier[0]).T, [1]]))
+        predictedPoint = predictedPoint / predictedPoint[2]
+        predictedPoint = predictedPoint[0:2]
+        
+        D = 1/(bestH[2,0] * inlier[0][0] + bestH[2,1] * inlier[0][1] + 1)
+        jacobian = np.vstack([jacobian , np.multiply(D , [inlier[0][0], inlier[0][1], 1, 0, 0, 0, -inlier[0][0] * predictedPoint[0,0], -inlier[0][1] * predictedPoint[0,0]])])
+        jacobian = np.vstack([jacobian , np.multiply(D , [0, 0, 0, inlier[0][0], inlier[0][1], 1, -inlier[0][0] * predictedPoint[1,0], -inlier[0][1] * predictedPoint[1,0]])])
+            
+        
+        res = np.vstack([res , [inlier[1][0] - predictedPoint[0,0] ]])
+        res = np.vstack([res , [inlier[1][1] - predictedPoint[1,0] ]])
+    
+        
+       
+        
+    jacobian = jacobian[1:, :]
+    res = res[1:, :]
+    
+    deltaH = np.matmul(np.linalg.inv(np.matmul(jacobian.T, jacobian)), np.matmul(jacobian.T, res))
+    deltaH = np.vstack([deltaH, [1]])
+    deltaH = deltaH.reshape((3,3))
+     
+    bestH = bestH + deltaH
+    
+    
+    error = 0
+    for inlier in bestInliers:
+        
+        predictedPointForTest = np.matmul(bestH, np.vstack([np.matrix(inlier[0]).T, [1]]))
+        predictedPointForTest = predictedPointForTest / predictedPointForTest[2]
+        predictedPointForTest = predictedPointForTest[0:2]
+        
+        errorDistance = L2Norm(np.array(inlier[1]).T, (predictedPointForTest.T))
+        error += errorDistance 
+    print("Error --> " + str(error))
 
+dst = cv.warpPerspective(image1,bestH,(image2.shape[1] + image1.shape[1], image2.shape[0]))
+plt.imshow(dst)
+plt.show()
 #kullandığın paketlerin version ını ver
 
 # sift için opencv 3.4.1 kullanılma, üst versiyonlarda sift patentli ve kullanılamıyor
