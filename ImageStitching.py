@@ -175,6 +175,12 @@ def ransac(matches, distanceTreshold = 2.5, inlierTreshold = 0.6, debug = False)
             break
         
     print("Final homography --> \n" + str(bestH))
+    
+    f = open('homography.txt', 'w')
+    f.write("Final homography: \n" + str(bestH)+"\n")
+    f.write("Final inliers count: " + str(len(bestInliers)))
+    f.close()
+        
     return bestH, bestInliers
 
 def warpImages(img1, img2, H):
@@ -234,8 +240,8 @@ matches = matchFeatures(kpsDsc1, kpsDsc2, True)
 
 finalH, inliers = ransac(matches, debug = True)
 
-matchImg = warpImages(image1Gray, image2Gray, None)
-cv.imwrite('Matches.png', matchImg)
+# matchImg = warpImages(image1Gray, image2Gray, None)
+# cv.imwrite('Matches.png', matchImg)
 
 
 print("GAUS NEWTON STARTS")
